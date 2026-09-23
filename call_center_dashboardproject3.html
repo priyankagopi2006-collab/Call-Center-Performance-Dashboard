@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Call Center Performance Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.32.0/plotly.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1420;
+    --panel:#161d2e;
+    --panel2:#1b2438;
+    --border:#2a3450;
+    --text:#e8ecf5;
+    --muted:#8a93ab;
+    --accent:#5b8cff;
+    --accent2:#31d0aa;
+    --warn:#ffb454;
+    --danger:#ff6b81;
+    --purple:#a78bfa;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Segoe UI',system-ui,-apple-system,Arial,sans-serif;
+    background:radial-gradient(1200px 600px at 10% -10%, #1c2540 0%, var(--bg) 55%), var(--bg);
+    color:var(--text);
+    min-height:100vh;
+  }
+  header{
+    padding:28px 32px 10px 32px;
+  }
+  header h1{
+    margin:0;
+    font-size:26px;
+    font-weight:700;
+    letter-spacing:.3px;
+  }
+  header p{
+    margin:6px 0 0 0;
+    color:var(--muted);
+    font-size:14px;
+  }
+  .note{
+    margin:10px 32px 0 32px;
+    padding:10px 14px;
+    background:rgba(91,140,255,.08);
+    border:1px solid rgba(91,140,255,.35);
+    border-radius:10px;
+    font-size:12.5px;
+    color:#c7d3f5;
+  }
+  .filters{
+    display:flex;
+    flex-wrap:wrap;
+    gap:14px;
+    margin:18px 32px;
+    padding:16px 18px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:14px;
+    align-items:flex-end;
+  }
+  .filter-group{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    min-width:150px;
+  }
+  .filter-group label{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.6px;
+    color:var(--muted);
+    font-weight:600;
+  }
+  select, input[type=date]{
+    background:var(--panel2);
+    color:var(--text);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:8px 10px;
+    font-size:13px;
+    outline:none;
+  }
+  select:focus, input:focus{border-color:var(--accent);}
+  button#resetBtn{
+    background:linear-gradient(135deg,var(--accent),#3a6bff);
+    border:none;
+    color:white;
+    padding:9px 18px;
+    border-radius:8px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    height:36px;
+  }
+  button#resetBtn:hover{filter:brightness(1.1);}
+  .kpi-grid{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:16px;
+    margin:0 32px 20px 32px;
+  }
+  .kpi-card{
+    background:linear-gradient(160deg,var(--panel),var(--panel2));
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:18px 20px;
+    position:relative;
+    overflow:hidden;
+  }
+  .kpi-card::before{
+    content:'';
+    position:absolute;
+    top:-30px;right:-30px;
+    width:90px;height:90px;
+    border-radius:50%;
+    background:var(--accentGlow, rgba(91,140,255,.15));
+    filter:blur(10px);
+  }
+  .kpi-card .label{
+    font-size:12px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:.5px;
+    font-weight:600;
+  }
+  .kpi-card .value{
+    font-size:26px;
+    font-weight:700;
+    margin-top:8px;
+  }
+  .kpi-card .sub{
+    font-size:11.5px;
+    color:var(--muted);
+    margin-top:4px;
+  }
+  .charts-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:18px;
+    margin:0 32px 32px 32px;
+  }
+  .chart-card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:14px 16px 6px 16px;
+  }
+  .chart-card.full{grid-column:1 / -1;}
+  .chart-card h3{
+    margin:2px 0 0 6px;
+    font-size:14.5px;
+    font-weight:600;
+    color:#dbe2f4;
+  }
+  @media (max-width:1100px){
+    .kpi-grid{grid-template-columns:repeat(2,1fr);}
+    .charts-grid{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📞 Call Center Performance Dashboard</h1>
+  <p>FY2026 · Representative & Customer Interaction Analytics</p>
+</header>
+
+<div class="note">
+  <strong>Data note:</strong> The uploaded dataset is call-log data (no Category/Product/City/Quantity fields).
+  This dashboard maps the requested layout onto the available columns: <em>"Sales"</em> → <strong>Purchase Amount</strong>,
+  <em>"Orders"</em> → <strong>Call Count</strong>, <em>"Quantity"</em> → <strong>Avg. Call Duration</strong>,
+  <em>"Product Performance"</em> → <strong>Representative Performance</strong>, and
+  <em>"Region/City Analysis"</em> → <strong>Day-of-Week Analysis</strong> (no geography field present in the data). No separate "Profit" figure exists, so Profit Margin is not shown.
+</div>
+
+<div class="filters">
+  <div class="filter-group">
+    <label>Representative</label>
+    <select id="repFilter"><option value="All">All</option></select>
+  </div>
+  <div class="filter-group">
+    <label>Day of Week</label>
+    <select id="dowFilter"><option value="All">All</option></select>
+  </div>
+  <div class="filter-group">
+    <label>Duration Bucket</label>
+    <select id="bucketFilter"><option value="All">All</option></select>
+  </div>
+  <div class="filter-group">
+    <label>From Date</label>
+    <input type="date" id="fromDate">
+  </div>
+  <div class="filter-group">
+    <label>To Date</label>
+    <input type="date" id="toDate">
+  </div>
+  <button id="resetBtn">Reset Filters</button>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi-card"><div class="label">Total Purchase Value</div><div class="value" id="kpiSales">-</div><div class="sub">Sum of Purchase Amount</div></div>
+  <div class="kpi-card"><div class="label">Avg. Satisfaction Rating</div><div class="value" id="kpiProfit">-</div><div class="sub">Out of 5</div></div>
+  <div class="kpi-card"><div class="label">Total Calls</div><div class="value" id="kpiOrders">-</div><div class="sub">Call volume in filter</div></div>
+  <div class="kpi-card"><div class="label">Avg. Call Duration</div><div class="value" id="kpiQty">-</div><div class="sub">Minutes per call</div></div>
+  <div class="kpi-card"><div class="label">Avg. Purchase / Call</div><div class="value" id="kpiMargin">-</div><div class="sub">Purchase Amount ÷ Calls</div></div>
+</div>
+
+<div class="charts-grid">
+  <div class="chart-card full"><h3>📈 Purchase Amount Trend Over Time</h3><div id="trendChart"></div></div>
+  <div class="chart-card"><h3>👤 Representative Performance (Total Purchase Value)</h3><div id="repChart"></div></div>
+  <div class="chart-card"><h3>⏱ Duration Bucket Analysis (Call Count & Avg Rating)</h3><div id="bucketChart"></div></div>
+  <div class="chart-card"><h3>📅 Day-of-Week Call Volume</h3><div id="dowChart"></div></div>
+  <div class="chart-card"><h3>⭐ Satisfaction Rating Distribution</h3><div id="ratingChart"></div></div>
+</div>
+
+<script>
+const rawData = [
+{callNo:"C001",custId:"CU001",duration:12,rep:"Priya",date:"2026-01-02",purchase:4500,rating:4.5,dow:"Friday",bucket:"10-15 min"},
+{callNo:"C002",custId:"CU002",duration:8,rep:"Arun",date:"2026-01-03",purchase:2800,rating:4,dow:"Saturday",bucket:"5-10 min"},
+{callNo:"C003",custId:"CU003",duration:25,rep:"Meena",date:"2026-01-05",purchase:7200,rating:5,dow:"Monday",bucket:"20-30 min"},
+{callNo:"C004",custId:"CU004",duration:17,rep:"Kumar",date:"2026-01-06",purchase:3500,rating:3.5,dow:"Tuesday",bucket:"15-20 min"},
+{callNo:"C005",custId:"CU005",duration:6,rep:"Suresh",date:"2026-01-07",purchase:1800,rating:3,dow:"Wednesday",bucket:"5-10 min"},
+{callNo:"C006",custId:"CU006",duration:32,rep:"Priya",date:"2026-01-08",purchase:9500,rating:4.5,dow:"Thursday",bucket:"30+ min"},
+{callNo:"C007",custId:"CU007",duration:14,rep:"Arun",date:"2026-01-09",purchase:4200,rating:4,dow:"Friday",bucket:"10-15 min"},
+{callNo:"C008",custId:"CU008",duration:21,rep:"Meena",date:"2026-01-10",purchase:6100,rating:4.5,dow:"Saturday",bucket:"20-30 min"},
+{callNo:"C009",custId:"CU009",duration:9,rep:"Kumar",date:"2026-01-12",purchase:2500,rating:3.5,dow:"Monday",bucket:"5-10 min"},
+{callNo:"C010",custId:"CU010",duration:28,rep:"Suresh",date:"2026-01-13",purchase:8300,rating:5,dow:"Tuesday",bucket:"20-30 min"},
+{callNo:"C011",custId:"CU011",duration:11,rep:"Priya",date:"2026-01-14",purchase:3900,rating:4,dow:"Wednesday",bucket:"10-15 min"},
+{callNo:"C012",custId:"CU012",duration:19,rep:"Arun",date:"2026-01-15",purchase:5700,rating:3.5,dow:"Thursday",bucket:"15-20 min"},
+{callNo:"C013",custId:"CU013",duration:35,rep:"Meena",date:"2026-01-16",purchase:10500,rating:4.5,dow:"Friday",bucket:"30+ min"},
+{callNo:"C014",custId:"CU014",duration:7,rep:"Kumar",date:"2026-01-17",purchase:2100,rating:3,dow:"Saturday",bucket:"5-10 min"},
+{callNo:"C015",custId:"CU015",duration:16,rep:"Suresh",date:"2026-01-19",purchase:4800,rating:4,dow:"Monday",bucket:"15-20 min"},
+{callNo:"C016",custId:"CU016",duration:23,rep:"Priya",date:"2026-01-20",purchase:6700,rating:5,dow:"Tuesday",bucket:"20-30 min"},
+{callNo:"C017",custId:"CU017",duration:13,rep:"Arun",date:"2026-01-21",purchase:3200,rating:3.5,dow:"Wednesday",bucket:"10-15 min"},
+{callNo:"C018",custId:"CU018",duration:31,rep:"Meena",date:"2026-01-22",purchase:8900,rating:4.5,dow:"Thursday",bucket:"30+ min"},
+{callNo:"C019",custId:"CU019",duration:5,rep:"Kumar",date:"2026-01-23",purchase:1500,rating:2.5,dow:"Friday",bucket:"5-10 min"},
+{callNo:"C020",custId:"CU020",duration:18,rep:"Suresh",date:"2026-01-24",purchase:5300,rating:4,dow:"Saturday",bucket:"15-20 min"},
+{callNo:"C021",custId:"CU021",duration:26,rep:"Priya",date:"2026-01-26",purchase:7600,rating:4.5,dow:"Monday",bucket:"20-30 min"},
+{callNo:"C022",custId:"CU022",duration:10,rep:"Arun",date:"2026-01-27",purchase:2900,rating:3,dow:"Tuesday",bucket:"10-15 min"},
+{callNo:"C023",custId:"CU023",duration:15,rep:"Meena",date:"2026-01-28",purchase:4400,rating:4,dow:"Wednesday",bucket:"15-20 min"},
+{callNo:"C024",custId:"CU024",duration:29,rep:"Kumar",date:"2026-01-29",purchase:8100,rating:5,dow:"Thursday",bucket:"20-30 min"},
+{callNo:"C025",custId:"CU025",duration:8,rep:"Suresh",date:"2026-01-30",purchase:2300,rating:3.5,dow:"Friday",bucket:"5-10 min"},
+{callNo:"C026",custId:"CU026",duration:22,rep:"Priya",date:"2026-01-31",purchase:6400,rating:4.5,dow:"Saturday",bucket:"20-30 min"},
+{callNo:"C027",custId:"CU027",duration:12,rep:"Arun",date:"2026-02-02",purchase:3700,rating:4,dow:"Monday",bucket:"10-15 min"},
+{callNo:"C028",custId:"CU028",duration:34,rep:"Meena",date:"2026-02-03",purchase:9800,rating:5,dow:"Tuesday",bucket:"30+ min"},
+{callNo:"C029",custId:"CU029",duration:6,rep:"Kumar",date:"2026-02-04",purchase:1900,rating:3,dow:"Wednesday",bucket:"5-10 min"},
+{callNo:"C030",custId:"CU030",duration:20,rep:"Suresh",date:"2026-02-05",purchase:5600,rating:4.5,dow:"Thursday",bucket:"20-30 min"},
+{callNo:"C031",custId:"CU031",duration:17,rep:"Priya",date:"2026-02-06",purchase:4300,rating:3.5,dow:"Friday",bucket:"15-20 min"},
+{callNo:"C032",custId:"CU032",duration:27,rep:"Arun",date:"2026-02-07",purchase:7900,rating:4,dow:"Saturday",bucket:"20-30 min"},
+{callNo:"C033",custId:"CU033",duration:9,rep:"Meena",date:"2026-02-09",purchase:2700,rating:3.5,dow:"Monday",bucket:"5-10 min"},
+{callNo:"C034",custId:"CU034",duration:24,rep:"Kumar",date:"2026-02-10",purchase:6800,rating:4.5,dow:"Tuesday",bucket:"20-30 min"},
+{callNo:"C035",custId:"CU035",duration:13,rep:"Suresh",date:"2026-02-11",purchase:3600,rating:4,dow:"Wednesday",bucket:"10-15 min"},
+{callNo:"C036",custId:"CU036",duration:30,rep:"Priya",date:"2026-02-12",purchase:9200,rating:5,dow:"Thursday",bucket:"30+ min"},
+{callNo:"C037",custId:"CU037",duration:7,rep:"Arun",date:"2026-02-13",purchase:2000,rating:3,dow:"Friday",bucket:"5-10 min"},
+{callNo:"C038",custId:"CU038",duration:16,rep:"Meena",date:"2026-02-14",purchase:4700,rating:4.5,dow:"Saturday",bucket:"15-20 min"},
+{callNo:"C039",custId:"CU039",duration:21,rep:"Kumar",date:"2026-02-16",purchase:5900,rating:4,dow:"Monday",bucket:"20-30 min"},
+{callNo:"C040",custId:"CU040",duration:11,rep:"Suresh",date:"2026-02-17",purchase:3100,rating:3.5,dow:"Tuesday",bucket:"10-15 min"},
+{callNo:"C041",custId:"CU041",duration:33,rep:"Priya",date:"2026-02-18",purchase:9700,rating:5,dow:"Wednesday",bucket:"30+ min"},
+{callNo:"C042",custId:"CU042",duration:14,rep:"Arun",date:"2026-02-19",purchase:4100,rating:4,dow:"Thursday",bucket:"10-15 min"},
+{callNo:"C043",custId:"CU043",duration:19,rep:"Meena",date:"2026-02-20",purchase:5200,rating:4.5,dow:"Friday",bucket:"15-20 min"},
+{callNo:"C044",custId:"CU044",duration:25,rep:"Kumar",date:"2026-02-21",purchase:7300,rating:4,dow:"Saturday",bucket:"20-30 min"},
+{callNo:"C045",custId:"CU045",duration:5,rep:"Suresh",date:"2026-02-23",purchase:1600,rating:2.5,dow:"Monday",bucket:"5-10 min"},
+{callNo:"C046",custId:"CU046",duration:18,rep:"Priya",date:"2026-02-24",purchase:4900,rating:4.5,dow:"Tuesday",bucket:"15-20 min"},
+{callNo:"C047",custId:"CU047",duration:27,rep:"Arun",date:"2026-02-25",purchase:8200,rating:5,dow:"Wednesday",bucket:"20-30 min"},
+{callNo:"C048",custId:"CU048",duration:10,rep:"Meena",date:"2026-02-26",purchase:3000,rating:3.5,dow:"Thursday",bucket:"10-15 min"},
+{callNo:"C049",custId:"CU049",duration:22,rep:"Kumar",date:"2026-02-27",purchase:6300,rating:4,dow:"Friday",bucket:"20-30 min"},
+{callNo:"C050",custId:"CU050",duration:15,rep:"Suresh",date:"2026-02-28",purchase:4500,rating:4.5,dow:"Saturday",bucket:"15-20 min"},
+{callNo:"C051",custId:"CU051",duration:36,rep:"Priya",date:"2026-03-02",purchase:11000,rating:5,dow:"Monday",bucket:"30+ min"},
+{callNo:"C052",custId:"CU052",duration:8,rep:"Arun",date:"2026-03-03",purchase:2200,rating:3,dow:"Tuesday",bucket:"5-10 min"},
+{callNo:"C053",custId:"CU053",duration:20,rep:"Meena",date:"2026-03-04",purchase:5800,rating:4,dow:"Wednesday",bucket:"20-30 min"},
+{callNo:"C054",custId:"CU054",duration:12,rep:"Kumar",date:"2026-03-05",purchase:3400,rating:3.5,dow:"Thursday",bucket:"10-15 min"},
+{callNo:"C055",custId:"CU055",duration:29,rep:"Suresh",date:"2026-03-06",purchase:8600,rating:4.5,dow:"Friday",bucket:"20-30 min"},
+{callNo:"C056",custId:"CU056",duration:6,rep:"Priya",date:"2026-03-07",purchase:1700,rating:3,dow:"Saturday",bucket:"5-10 min"},
+{callNo:"C057",custId:"CU057",duration:24,rep:"Arun",date:"2026-03-09",purchase:7100,rating:4.5,dow:"Monday",bucket:"20-30 min"},
+{callNo:"C058",custId:"CU058",duration:16,rep:"Meena",date:"2026-03-10",purchase:4600,rating:4,dow:"Tuesday",bucket:"15-20 min"},
+{callNo:"C059",custId:"CU059",duration:31,rep:"Kumar",date:"2026-03-11",purchase:9400,rating:5,dow:"Wednesday",bucket:"30+ min"},
+{callNo:"C060",custId:"CU060",duration:9,rep:"Suresh",date:"2026-03-12",purchase:2600,rating:3.5,dow:"Thursday",bucket:"5-10 min"}
+];
+
+const dowOrder = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const bucketOrder = ["5-10 min","10-15 min","15-20 min","20-30 min","30+ min"];
+
+const repSel = document.getElementById('repFilter');
+const dowSel = document.getElementById('dowFilter');
+const bucketSel = document.getElementById('bucketFilter');
+const fromDate = document.getElementById('fromDate');
+const toDate = document.getElementById('toDate');
+
+function unique(arr){return [...new Set(arr)];}
+unique(rawData.map(d=>d.rep)).sort().forEach(r=>{
+  const o=document.createElement('option'); o.value=r; o.textContent=r; repSel.appendChild(o);
+});
+dowOrder.forEach(d=>{
+  if(rawData.some(x=>x.dow===d)){
+    const o=document.createElement('option'); o.value=d; o.textContent=d; dowSel.appendChild(o);
+  }
+});
+bucketOrder.forEach(b=>{
+  if(rawData.some(x=>x.bucket===b)){
+    const o=document.createElement('option'); o.value=b; o.textContent=b; bucketSel.appendChild(o);
+  }
+});
+
+const dates = rawData.map(d=>d.date).sort();
+fromDate.value = dates[0];
+toDate.value = dates[dates.length-1];
+
+function fmtMoney(n){
+  return '₹' + Math.round(n).toLocaleString('en-IN');
+}
+
+function getFiltered(){
+  const rep = repSel.value, dow = dowSel.value, bucket = bucketSel.value;
+  const f = fromDate.value, t = toDate.value;
+  return rawData.filter(d=>{
+    if(rep!=='All' && d.rep!==rep) return false;
+    if(dow!=='All' && d.dow!==dow) return false;
+    if(bucket!=='All' && d.bucket!==bucket) return false;
+    if(f && d.date < f) return false;
+    if(t && d.date > t) return false;
+    return true;
+  });
+}
+
+const plotLayoutBase = {
+  paper_bgcolor:'rgba(0,0,0,0)',
+  plot_bgcolor:'rgba(0,0,0,0)',
+  font:{color:'#dbe2f4', size:12},
+  margin:{t:10,b:40,l:50,r:20},
+  xaxis:{gridcolor:'#2a3450'},
+  yaxis:{gridcolor:'#2a3450'}
+};
+
+function renderAll(){
+  const data = getFiltered();
+
+  const totalPurchase = data.reduce((s,d)=>s+d.purchase,0);
+  const avgRating = data.length ? data.reduce((s,d)=>s+d.rating,0)/data.length : 0;
+  const totalCalls = data.length;
+  const avgDuration = data.length ? data.reduce((s,d)=>s+d.duration,0)/data.length : 0;
+  const avgPurchasePerCall = totalCalls ? totalPurchase/totalCalls : 0;
+
+  document.getElementById('kpiSales').textContent = fmtMoney(totalPurchase);
+  document.getElementById('kpiProfit').textContent = avgRating.toFixed(2) + ' / 5';
+  document.getElementById('kpiOrders').textContent = totalCalls.toLocaleString('en-IN');
+  document.getElementById('kpiQty').textContent = avgDuration.toFixed(1) + ' min';
+  document.getElementById('kpiMargin').textContent = fmtMoney(avgPurchasePerCall);
+
+  // Trend
+  const byDate = {};
+  data.forEach(d=>{ byDate[d.date] = (byDate[d.date]||0) + d.purchase; });
+  const sortedDates = Object.keys(byDate).sort();
+  Plotly.newPlot('trendChart', [{
+    x: sortedDates,
+    y: sortedDates.map(d=>byDate[d]),
+    type:'scatter', mode:'lines+markers',
+    line:{color:'#5b8cff', width:3, shape:'spline'},
+    marker:{size:6, color:'#5b8cff'},
+    fill:'tozeroy', fillcolor:'rgba(91,140,255,0.12)'
+  }], {...plotLayoutBase, height:280, xaxis:{...plotLayoutBase.xaxis, title:'Date'}, yaxis:{...plotLayoutBase.yaxis, title:'Purchase Amount (₹)'}}, {responsive:true, displayModeBar:false});
+
+  // Rep performance
+  const byRep = {};
+  data.forEach(d=>{ byRep[d.rep] = (byRep[d.rep]||0) + d.purchase; });
+  const reps = Object.keys(byRep).sort((a,b)=>byRep[b]-byRep[a]);
+  Plotly.newPlot('repChart', [{
+    x: reps.map(r=>byRep[r]),
+    y: reps,
+    type:'bar', orientation:'h',
+    marker:{color:'#31d0aa'}
+  }], {...plotLayoutBase, height:280, xaxis:{...plotLayoutBase.xaxis, title:'Total Purchase (₹)'}, yaxis:{...plotLayoutBase.yaxis, automargin:true}}, {responsive:true, displayModeBar:false});
+
+  // Bucket analysis
+  const byBucket = {};
+  data.forEach(d=>{
+    if(!byBucket[d.bucket]) byBucket[d.bucket] = {count:0, ratingSum:0};
+    byBucket[d.bucket].count++;
+    byBucket[d.bucket].ratingSum += d.rating;
+  });
+  const bkeys = bucketOrder.filter(b=>byBucket[b]);
+  Plotly.newPlot('bucketChart', [
+    {x:bkeys, y:bkeys.map(b=>byBucket[b].count), type:'bar', name:'Call Count', marker:{color:'#ffb454'}, yaxis:'y'},
+    {x:bkeys, y:bkeys.map(b=>byBucket[b].ratingSum/byBucket[b].count), type:'scatter', mode:'lines+markers', name:'Avg Rating', marker:{color:'#ff6b81'}, line:{color:'#ff6b81'}, yaxis:'y2'}
+  ], {
+    ...plotLayoutBase, height:280,
+    xaxis:{...plotLayoutBase.xaxis},
+    yaxis:{...plotLayoutBase.yaxis, title:'Call Count'},
+    yaxis2:{title:'Avg Rating', overlaying:'y', side:'right', range:[0,5.5], gridcolor:'transparent'},
+    legend:{orientation:'h', y:1.15}
+  }, {responsive:true, displayModeBar:false});
+
+  // Day of week
+  const byDow = {};
+  data.forEach(d=>{ byDow[d.dow] = (byDow[d.dow]||0) + 1; });
+  const dkeys = dowOrder.filter(d=>byDow[d]);
+  Plotly.newPlot('dowChart', [{
+    x:dkeys, y:dkeys.map(d=>byDow[d]),
+    type:'bar', marker:{color:'#a78bfa'}
+  }], {...plotLayoutBase, height:280, yaxis:{...plotLayoutBase.yaxis, title:'Call Count'}}, {responsive:true, displayModeBar:false});
+
+  // Rating distribution
+  const byRating = {};
+  data.forEach(d=>{ byRating[d.rating] = (byRating[d.rating]||0) + 1; });
+  const rkeys = Object.keys(byRating).sort((a,b)=>a-b);
+  Plotly.newPlot('ratingChart', [{
+    labels: rkeys,
+    values: rkeys.map(r=>byRating[r]),
+    type:'pie', hole:.5,
+    marker:{colors:['#ff6b81','#ffb454','#5b8cff','#31d0aa','#a78bfa','#4ecdc4']},
+    textinfo:'label+percent',
+    textfont:{color:'#0f1420'}
+  }], {...plotLayoutBase, height:280, showlegend:true, legend:{orientation:'h', y:-0.15}}, {responsive:true, displayModeBar:false});
+}
+
+[repSel, dowSel, bucketSel, fromDate, toDate].forEach(el=>el.addEventListener('change', renderAll));
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  repSel.value='All'; dowSel.value='All'; bucketSel.value='All';
+  fromDate.value=dates[0]; toDate.value=dates[dates.length-1];
+  renderAll();
+});
+
+renderAll();
+</script>
+</body>
+</html>
